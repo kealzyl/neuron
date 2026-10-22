@@ -1,4 +1,5 @@
 # Kealzyl Neuron
+#### # You can find the models [here](https://github.com/kealzyl/neuron/releases/tag/neuron).
 
 A local Flask dashboard for a small PyTorch phrase classifier.
 
