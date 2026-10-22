@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kealzyl Neuron</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">
+        <img class="brand-mark" src="{{ url_for('static', filename='neuron.png') }}" alt="Kealzyl Neuron logo">
+        <span><strong>Kealzyl Neuron</strong><small>PHRASE CLASSIFIER</small></span>
+      </a>
+      <div class="status"><span class="status-dot"></span><span id="serverStatus">LOCAL SYSTEM</span></div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="eyebrow-line"></span> PYTORCH · LOCAL AI</div>
+        <h1>Small network.<br><span>Clear answers.</span></h1>
+        <p>Enter a phrase, run it through your neural network, and train the model with your own examples.</p>
+        <div class="hero-tags">
+          <span><i></i> {{ hidden_layers }} hidden layers</span>
+          <span><i></i> {{ hidden_size }} neurons per layer</span>
+          <span><i></i> {{ device_name }}</span>
+        </div>
+      </div>
+      <div class="network-art" aria-label="Neural network illustration">
+        <div class="orbit orbit-a"></div><div class="orbit orbit-b"></div>
+        <svg viewBox="0 0 350 240" role="img" aria-label="Abstract neural network">
+          <g class="connections">
+            {% for a in range(5) %}
+              {% for b in range(5) %}
+                <line x1="48" y1="{{ 35 + a*42 }}" x2="130" y2="{{ 25 + b*44 }}" />
+                <line x1="130" y1="{{ 25 + a*44 }}" x2="218" y2="{{ 35 + b*42 }}" />
+                <line x1="218" y1="{{ 35 + a*42 }}" x2="300" y2="{{ 75 + b*30 }}" />
+              {% endfor %}
+            {% endfor %}
+          </g>
+          {% for y in range(5) %}
+            <g class="node-group">
+              <circle cx="48" cy="{{ 35 + y*42 }}" r="7"/>
+              <circle cx="130" cy="{{ 25 + y*44 }}" r="7"/>
+              <circle cx="218" cy="{{ 35 + y*42 }}" r="7"/>
+              <circle cx="300" cy="{{ 75 + y*30 }}" r="7"/>
+            </g>
+          {% endfor %}
+        </svg>
+        <div class="art-caption">SIGNAL FLOW <span>01 — 10</span></div>
+      </div>
+    </section>
+
+    <section class="stats-grid">
+      <article class="stat-card"><span class="stat-label">TRAINING EXAMPLES</span><strong id="exampleCount">{{ example_count }}</strong><span class="stat-foot">phrases in dataset</span></article>
+      <article class="stat-card"><span class="stat-label">OUTPUT CLASSES</span><strong>05</strong><span class="stat-foot">possible responses</span></article>
+      <article class="stat-card"><span class="stat-label">MODEL CHECKPOINT</span><strong id="modelState">{{ "SAVED" if model_loaded else "NEW" }}</strong><span class="stat-foot" id="modelFoot">{{ "Saved weights detected" if model_loaded else "Train to create a checkpoint" }}</span></article>
+    </section>
+
+    <section class="main-grid">
+      <article class="panel classify-panel">
+        <div class="panel-heading"><div><div class="eyebrow">01 / INFERENCE</div><h2>Test a phrase</h2></div><span class="panel-icon">↗</span></div>
+        <p class="panel-desc">What response does the network associate with your phrase?</p>
+        <label class="field-label" for="phraseInput">YOUR PHRASE</label>
+        <textarea id="phraseInput" maxlength="1000" placeholder="e.g. Without a doubt, that sounds good."></textarea>
+        <div class="input-meta"><span>MAX 1,000 CHARACTERS</span><span id="charCount">0 / 1000</span></div>
+        <button class="button button-primary" id="predictBtn" onclick="predictPhrase()">Classify phrase <span>→</span></button>
+        <div class="result-box" id="resultBox" aria-live="polite">
+          <div class="result-empty"><span class="result-glyph">⌁</span><div><strong>Awaiting input</strong><small>Your prediction will appear here.</small></div></div>
+        </div>
+        <div class="probability-list" id="probabilities"></div>
+      </article>
+
+      <article class="panel training-panel">
+        <div class="panel-heading"><div><div class="eyebrow">02 / LEARNING</div><h2>Train the network</h2></div><span class="panel-icon">⌘</span></div>
+        <p class="panel-desc">Add labeled phrases, then train the model on the examples collected so far.</p>
+        <label class="field-label" for="exampleText">TRAINING PHRASE</label>
+        <textarea id="exampleText" class="short-textarea" maxlength="1000" placeholder="Type a phrase that the network should learn..."></textarea>
+        <label class="field-label" for="exampleLabel">EXPECTED RESPONSE</label>
+        <select id="exampleLabel">
+          {% for label in labels %}<option value="{{ label }}">{{ label }}</option>{% endfor %}
+        </select>
+        <button class="button button-secondary" id="addBtn" onclick="addExample()">＋ Add training example</button>
+        <div class="bulk-entry">
+          <label class="field-label" for="bulkExamples">BULK IMPORT · ONE EXAMPLE PER LINE</label>
+          <textarea id="bulkExamples" class="bulk-textarea" placeholder="yes | Absolutely, let's do it!&#10;no | I don't agree with that&#10;maybe | It depends on the situation&#10;surely not | There is no chance&#10;of course | Without a doubt"></textarea>
+          <div class="bulk-hint">Format: <code>label | phrase</code>. You can paste hundreds of lines at once. Labels: yes, no, maybe, surely not, of course.</div>
+          <button class="button button-secondary" id="bulkBtn" onclick="addBulkExamples()">⇧ Import bulk examples</button>
+        </div>
+        <div class="divider"></div>
+        <div class="train-controls">
+          <div><label class="field-label" for="epochs">TRAINING EPOCHS</label><input id="epochs" type="number" min="1" max="1000" value="120"></div>
+          <button class="button button-primary train-button" id="trainBtn" onclick="trainModel()">Train model <span>↗</span></button>
+        </div>
+        <div class="progress-track"><div id="progressBar"></div></div>
+        <div class="training-message" id="trainingMessage">Ready when you are.</div>
+        <div class="action-row">
+          <button class="button button-quiet" onclick="saveModel()">↓ Save model</button>
+          <button class="button button-quiet" onclick="loadModel()">↻ Load model</button>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel dataset-panel">
+      <div class="panel-heading"><div><div class="eyebrow">03 / DATASET</div><h2>Recent examples</h2></div><button class="text-button" onclick="refreshExamples()">Refresh ↻</button></div>
+      <div id="examplesList" class="examples-list"><div class="dataset-empty">Loading training examples…</div></div>
+      <div class="dataset-footer"><span id="datasetSummary">Loading dataset details…</span><span>Stored locally in training_data.json</span></div>
+    </section>
+
+    <footer><span>KEALZYL NEURON <span class="footer-dot">●</span> LOCAL FIRST</span><span>A compact classifier, not a general-purpose language model.</span></footer>
+  </main>
+  <div id="toast" class="toast" role="status"></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let toastTimer;
+    function toast(message, bad=false) {
+      const el = $("toast"); el.textContent = message; el.className = "toast visible" + (bad ? " bad" : "");
+      clearTimeout(toastTimer); toastTimer = setTimeout(() => el.className = "toast", 3200);
+    }
+    async function api(url, body) {
+      const response = await fetch(url, {
+        method: body === undefined ? "GET" : "POST",
+        headers: body === undefined ? {} : {"Content-Type":"application/json"},
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Request failed.");
+      return data;
+    }
+    $("phraseInput").addEventListener("input", () => $("charCount").textContent = `${$("phraseInput").value.length} / 1000`);
+    $("phraseInput").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") predictPhrase(); });
+
+    async function predictPhrase() {
+      const text = $("phraseInput").value.trim();
+      if (!text) return toast("Type a phrase first.", true);
+      const btn = $("predictBtn"); btn.disabled = true; btn.innerHTML = "Analyzing…";
+      try {
+        const data = await api("/api/predict", {text});
+        $("resultBox").innerHTML = `<div class="result-main"><div><span class="result-kicker">PREDICTED RESPONSE</span><strong>${escapeHtml(data.prediction)}</strong></div><div class="confidence"><strong>${data.confidence}%</strong><small>network score</small></div></div><div class="result-note">${escapeHtml(data.note)}</div>`;
+        $("probabilities").innerHTML = data.probabilities.map(item => `<div class="prob-row"><div><span>${escapeHtml(item.label)}</span><b>${item.percent}%</b></div><div class="prob-track"><i style="width:${item.percent}%"></i></div></div>`).join("");
+      } catch(e) { toast(e.message, true); }
+      finally { btn.disabled = false; btn.innerHTML = 'Classify phrase <span>→</span>'; }
+    }
+    async function addExample() {
+      const btn = $("addBtn"); btn.disabled = true;
+      try {
+        const data = await api("/api/examples", {text:$("exampleText").value, label:$("exampleLabel").value});
+        $("exampleText").value = ""; toast(data.message); await refreshExamples(); await refreshStatus();
+      } catch(e) { toast(e.message, true); }
+      finally { btn.disabled = false; }
+    }
+    async function addBulkExamples() {
+      const raw = $("bulkExamples").value.trim();
+      if (!raw) return toast("Paste some training examples first.", true);
+      const examples = [];
+      const errors = [];
+      const validLabels = ["yes", "no", "maybe", "surely not", "of course"];
+      raw.split(/\r?\n/).forEach((line, index) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) return;
+        let label = "", text = "";
+        let parts = trimmed.split("|");
+        if (parts.length >= 2) {
+          const left = parts.shift().trim().toLowerCase();
+          const right = parts.join("|").trim();
+          if (validLabels.includes(left)) { label = left; text = right; }
+          else if (validLabels.includes(right.toLowerCase())) { label = right.toLowerCase(); text = left; }
+        } else {
+          parts = trimmed.split("\t");
+          if (parts.length >= 2) {
+            const left = parts.shift().trim().toLowerCase();
+            const right = parts.join("\t").trim();
+            if (validLabels.includes(left)) { label = left; text = right; }
+            else if (validLabels.includes(right.toLowerCase())) { label = right.toLowerCase(); text = left; }
+          }
+        }
+        if (!label || !text) errors.push(`Line ${index + 1}`);
+        else examples.push({label, text});
+      });
+      if (!examples.length) return toast("No valid lines. Use: yes | your phrase", true);
+      const btn = $("bulkBtn"); btn.disabled = true; btn.textContent = `Importing ${examples.length}…`;
+      try {
+        const data = await api("/api/examples/bulk", {examples});
+        $("bulkExamples").value = "";
+        toast(data.message + (data.rejected ? ` ${data.rejected} rows skipped.` : ""));
+        $("trainingMessage").textContent = data.rejected
+          ? `Imported ${data.added}; skipped ${data.rejected}. Check your label spelling and line format.`
+          : `Imported ${data.added} examples. Ready to train.`;
+        await refreshExamples(); await refreshStatus();
+      } catch(e) { toast(e.message, true); }
+      finally { btn.disabled = false; btn.textContent = "⇧ Import bulk examples"; }
+    }
+
+    async function trainModel() {
+      const epochs = Number($("epochs").value);
+      if (!Number.isFinite(epochs) || epochs < 1 || epochs > 1000) return toast("Epochs must be between 1 and 1,000.", true);
+      const btn = $("trainBtn"); btn.disabled = true; btn.innerHTML = "Training…";
+      $("progressBar").style.width = "25%"; $("trainingMessage").textContent = "Training the neural network. This may take a moment…";
+      try {
+        const data = await api("/api/train", {epochs});
+        $("progressBar").style.width = "100%";
+        $("trainingMessage").textContent = `${data.status} · ${data.epochs} epochs · loss ${data.loss}`;
+        toast("Training complete. Checkpoint saved."); await refreshStatus();
+      } catch(e) {
+        $("progressBar").style.width = "0%"; $("trainingMessage").textContent = e.message; toast(e.message, true);
+      } finally { btn.disabled = false; btn.innerHTML = 'Train model <span>↗</span>'; }
+    }
+    async function saveModel() {
+      try { const data = await api("/api/save", {}); toast(data.message); await refreshStatus(); }
+      catch(e) { toast(e.message, true); }
+    }
+    async function loadModel() {
+      try { const data = await api("/api/load", {}); toast(data.message); await refreshStatus(); }
+      catch(e) { toast(e.message, true); }
+    }
+    async function refreshStatus() {
+      try {
+        const d = await api("/api/status");
+        $("exampleCount").textContent = d.examples;
+        $("modelState").textContent = d.model_saved ? "SAVED" : "NEW";
+        $("modelFoot").textContent = d.model_saved ? "Saved weights detected" : "Train to create a checkpoint";
+        $("serverStatus").textContent = d.training ? "TRAINING" : "LOCAL SYSTEM";
+      } catch(e) {}
+    }
+    async function refreshExamples() {
+      try {
+        const d = await api("/api/examples");
+        $("examplesList").innerHTML = d.examples.length ? d.examples.slice(0,12).map(row => `<div class="example-row"><span class="example-phrase">${escapeHtml(row.text)}</span><span class="label-chip label-${slug(row.label)}">${escapeHtml(row.label)}</span></div>`).join("") : '<div class="dataset-empty">No examples yet.</div>';
+        $("datasetSummary").textContent = `${d.total} examples · showing ${Math.min(12,d.examples.length)} recent`;
+        $("exampleCount").textContent = d.total;
+      } catch(e) { $("examplesList").innerHTML = '<div class="dataset-empty">Could not load examples.</div>'; }
+    }
+    function slug(s) { return s.toLowerCase().replaceAll(" ", "-"); }
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+    refreshStatus(); refreshExamples();
+  </script>
+</body>
+</html>
